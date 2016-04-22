@@ -4,6 +4,8 @@ from sklearn.metrics import *
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
+import scipy.stats
+from matplotlib.pyplot import loglog
 
 
 
@@ -12,18 +14,17 @@ def classif_metrics(evaluator, cv, X, y, precision_recall = False, auc = 0, pos_
     #can only reduce data for ensemble methods (like random forest)
     #pos_label is the label for positive samples (1 is default)
     #set precision_recall, auc, and log_loss to True if you want those scores evaluated for each fold
-    
-    results = [] #accuracy of classifier
+
+    results = []
     precision = []
     recall = []
     F1 = []
     truepos = []
     falsepos = []
-    auc_ = [] 
-    num_ones = [] #the number of 1's the classifier predicted for each fold
-    				# helpful for situations when 1 has a low prob of occuring (diseases etc.)
+    auc_ = []
+    num_ones = []
 
-    if reduce_data:
+    if reduce_data is not False:
         evaluatorFit = evaluator.fit(X, y)
         if "n_estimators" in evaluatorFit.get_params():
             X = evaluatorFit.transform(X)
@@ -34,28 +35,27 @@ def classif_metrics(evaluator, cv, X, y, precision_recall = False, auc = 0, pos_
         evaluatorFit = evaluator.fit(X[traincv], y[traincv])
         #print evaluatorFit.coef_
 
-        # FoldScore = evaluatorFit.score(X[testcv], y[testcv])
+        FoldScore = evaluatorFit.score(X[testcv], y[testcv])
+        results.append(FoldScore)
 
-        # get predicted correct and the actual predicted values from model
-        results.append(evaluatorFit.score(X[testcv], y[testcv]))
         FoldPredicts = evaluatorFit.predict(X[testcv])
 #         print FoldPredicts
 #         print y[testcv]
 
-        if precision_recall:
+        if precision_recall is not False:
             precision.append(precision_score(y[testcv], FoldPredicts))
             recall.append(recall_score(y[testcv], FoldPredicts)) 
             F1.append(f1_score(y[testcv], FoldPredicts)) 
-            # conf_mat = confusion_matrix(y[testcv],FoldPredicts)
-            # truepos.append(conf_mat[1][1]/(conf_mat[1][1]+conf_mat[1][0]))
-            # falsepos.append(conf_mat[0][1]/(conf_mat[0][1]+conf_mat[1][1]))
+            conf_mat = confusion_matrix(y[testcv],FoldPredicts)
+            truepos.append(conf_mat[1][1])
+            falsepos.append(conf_mat[0][1])
 
         if auc: 
             FoldProbas = evaluatorFit.predict_proba(X[testcv])
             Oneprobas = [x[1] for x in FoldProbas]
             auc_.append(roc_auc_score(y[testcv], Oneprobas))
 
-        if predicted_ones:
+        if predicted_ones is not False:
             predictions = evaluatorFit.predict(X[testcv])
             num_ones.append(predictions.sum())
 
@@ -65,8 +65,11 @@ def classif_metrics(evaluator, cv, X, y, precision_recall = False, auc = 0, pos_
             "precision": np.array(precision).mean(), \
             "recall": np.array(recall).mean(), \
             "F1": np.array(F1).mean(),\
+            "truepos": np.array(truepos).mean(), \
+            "falsepos": np.array(falsepos).mean(), \
             "auc": np.array(auc_).mean(),\
             "predicted_ones": np.array(num_ones).mean() }
+
 
 
 
@@ -125,23 +128,23 @@ def regression_metrics(evaluator, cv, X, y, precision_recall = False, auc = 0, p
             num_ones.append(predictions.sum())
        
       
-            
-            
-     #put all points (predicted and actual) in on vector to help with setting axes       
+     #put all points in on vector to help with setting axes       
     all_pts = np.concatenate((all_predicts, all_actual), axis = 0)
     plt.figure()
     slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(all_actual, all_predicts)
-    print 'r:', r_value, "r-squared:", r_value**2, ' p value: ', p_value
+    print 'r:', r_value, "r-squared:", r_value**2, ' p value: ', p_value, 'score', np.mean(np.array(results))
     
-
-
-    ## PLOT predicted vs actual ##
-    plt.plot( all_actual, all_predicts,'x', range(int(np.amax(all_pts))), range(int(np.amax(all_pts))), '-')
+    ## PLOT ##
+    plt.loglog( all_actual, all_predicts,'o', range(int(np.amax(all_pts))), range(int(np.amax(all_pts))), '-')
     plt.xlabel('Actual')
     plt.ylabel('Predicted')
     plt.xlim([0,np.amax(all_pts)])
     plt.ylim([0,np.amax(all_pts)])
+    
+#     plt.xscale('log')
+#     plt.yscale('log')
+    
     plt.show
-    return {'r': r_value, "r-squared": r_value**2, ' p value': p_value }
+    return {'r': r_value, "r-squared": r_value**2, ' p value': p_value, 'score': np.mean(np.array(results)) }
 
 	        
